@@ -1,0 +1,59 @@
+---
+title: "R Final Project : Breast Cancer Classification :: Cancer Cases"
+author: "Utpal Mishra - 20207425"
+date: "25 December 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import Libraries
+
+```{r}
+library(psych)
+```
+
+## Import Data 
+
+```{r cars}
+library(readxl)
+
+data <- read.csv("E:/UCD/Lectures/Semester 1/Data Programming with R/Final Project/CancerCases.csv")
+data
+```
+
+## Data Analysis
+
+```{r}
+summary(data)
+describe(data) 
+```
+
+## Boxplot
+
+Frequency plot for all the cancer cases being witnessed and as can be seen, breast cancer occupies the second spot.
+
+```{r}
+library(ggplot2) #using ggplot2 to plot the frequency plot for the cancer cases
+
+p <- ggplot(data, aes(x = Cancer, y = Cases, fill = Cases), main = "Frequency plot for the Cancer Cases", xlab = "Frequency", ylab = "Cancer") +  geom_bar(stat="identity") + theme_minimal()
+#ggplot(data = data, aes(x = Cancer, y = Cases, fill = Cancer)) + geom_bar(stat="identity") + guides(fill=FALSE)
+p
+```
+
+```{r}
+# Load required R packages
+library(highcharter) 
+# Set highcharter options
+options(highcharter.theme = hc_theme_smpl(tooltip = list(valueDecimals = 2)))
+```
+
+```{r}
+data %>% hchart('column', hcaes(x = Cancer, y = Cases))
+```
+
+```{r}
+
+```
