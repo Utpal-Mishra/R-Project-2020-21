@@ -1,0 +1,536 @@
+---
+title: "R Final Project : Breast Cancer Classification :: Notebook 1.1"
+author: "Utpal Mishra - 20207425"
+date: "26 December 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Import Libraries
+
+```{r}
+require(dplyr)
+require(repr)
+library(corrplot)
+library(gplots)
+library(psych)
+library(fitdistrplus)
+library(tidyverse)
+library(corpcor)
+library("ggplot2", lib.loc="~/R/win-library/3.6")
+library("GGally", lib.loc="~/R/win-library/3.6")
+
+cat("IMPORTED LIBRARIES!!!")
+```
+
+### Import Breast Cancer Data
+
+```{r cars}
+library(readxl) #reading data using the function read.csv() from the library readxl 
+
+data <- read.csv("E:/UCD/Lectures/Semester 1/Data Programming with R/Final Project/breast-cancer-wisconsin_wdbc.csv")
+data <- data[c(-1)]
+head(data) #View(data) #fix(data) #display first 5 rows of the data
+```
+
+### Statistical values about Data 
+
+```{r}
+summary(data) # summary of the data with IQR
+describe(data) # statitical estimations of the data
+```
+
+### Correlation Plot
+
+Finding correlation values between the features of the data to understand the degree of correleation.
+
+
+```{r}
+ggcorr(data[c(-1)], nbreaks = 10, label = TRUE, label_size = 2, color = "grey50") #finding the correlation between the data features
+#cor.plot(data[c(-1)])
+#cor.plot(createDummyFeatures(data)[c(-1)])
+```
+
+A strong correlation i.e. [0.8, 1] is showen by dark red blocks while as we move to dark sky blue blocks (lowest correlation), the strength of relationhsip between the data attributes decreases. This correlation is also useful to fetch out on highly correlated features, preprocess them and build the classification model.
+
+### Boxplot 
+
+Boxplot in an effective plot to visualize the presence of outliers in the data. As can be seen, from the plot there are 2 features nucA and nucC specifically that contains high number of outliers.
+
+```{r}
+boxplot(data[c(-1)], col = "red", main = "Finding Outliers", notch = TRUE, xlab = "Features", ylab = "Statistically Calulated Values") #using boxplot to find the outliers
+```
+
+### Removing Outliers
+
+```{r}
+#install.packages("ggstatsplot")
+#update.packages("ggstatsplot")
+require("ggstatsplot", lib.loc="~/R/win-library/3.6") #using ggstatsplot to remove outliers from the data
+
+for(i in c(1:3)){
+  outliers <- boxplot(data$area..nucA., plot=FALSE)$out #fetching out the ouliers from the boxplot
+  x <- data #making a dimmy dataset
+  x <- x[-which(x$area..nucA. %in% outliers), ] #remove ouliers from the data
+  #boxplot(x[c(-1)], col = "red")
+  data <- x #update original data without outliers
+  
+  outliers <- boxplot(data$area..nucB., plot=FALSE)$out
+  x <- data #making a dimmy dataset
+  x <- x[-which(x$area..nucB. %in% outliers), ] #remove ouliers from the data
+  #boxplot(x[c(-1)], col = "red")
+  data <- x #update original data without outliers
+  
+  outliers <- boxplot(data$area..nucC., plot=FALSE)$out
+  x <- data #making a dimmy dataset
+  x <- x[-which(x$area..nucC. %in% outliers), ] #remove ouliers from the data
+  #boxplot(x[c(-1)], col = "red")
+  data <- x #update original data without outliers
+}
+
+boxplot(data[c(-1)], col = "red", main = "Finding Outliers", notch = TRUE, xlab = "Features", ylab = "Statistically Calulated Values") #using boxplot to witness the data without outliers
+```
+
+As can be compared from the above two boxplots, the outliers for the columns nucA and nucC are removed in the later one with change in the y-scale from the multiple iterations
+
+### Standardizing the Data
+
+```{r}
+tail(data[c(-1)]) #original data
+```
+
+```{r}
+data[c(-1)] = as.data.frame(scale(data[c(-1)])) #scaling the data
+tail(data[c(-1)])
+```
+
+## Resampling
+
+```{r}
+prop.table(table(data$diagnosis..M.malignant..B.benign.)) #frequency table for diagnosis into Malignant and Benign
+barplot(table(data$diagnosis..M.malignant..B.benign.), col = "orange", xlab = "Dignosis", ylab = "Frequency", main = "Class Distribution") #frequency plot for diagnosis into Malignant and Benign
+```
+
+```{r}
+#install.packages("ROSE")
+require(ROSE) #using rose library for over-sampling the data
+
+data = ovun.sample(diagnosis..M.malignant..B.benign. ~ ., data = data, method = "over", seed = 1)$data
+
+prop.table(table(ovun.sample(diagnosis..M.malignant..B.benign. ~ ., data = data, method = "over", seed = 1)$data$diagnosis..M.malignant..B.benign.)) #frequency table for diagnosis into Malignant and Benign
+
+barplot(table(ovun.sample(diagnosis..M.malignant..B.benign. ~ ., data = data, method = "over", seed = 1)$data$diagnosis..M.malignant..B.benign.), col = "lightblue", xlab = "Dignosis", ylab = "Frequency", main = "Over-sampled Class Distribution") #frequency plot for diagnosis into Malignant and Benign
+```
+
+# Building Classfication Model
+
+### Spliting the Data into Training and Testing Data
+
+```{r}
+library(caTools)
+
+data[c(-1)] = scale(data[c(-1)])
+#data$diagnosis..M.malignant..B.benign. = factor(data$diagnosis..M.malignant..B.benign., levels = c(0, 1))
+sample.split(data$diagnosis..M.malignant..B.benign., SplitRatio = 0.80) -> split_data
+
+subset(data, split_data == TRUE) -> train_data
+subset(data, split_data == FALSE) -> test_data
+```
+
+## Decision Tree
+
+### Fitting Model
+
+```{r}
+library(rpart) #using rpart function to build a decision tree classification model
+
+rpart(diagnosis..M.malignant..B.benign. ~., data = train_data) -> dtmodel #fitting the model
+summary(dtmodel) #model summary
+```
+
+### Predictions
+
+```{r}
+library(caret) #using caret to make model predictions
+
+predict(dtmodel, test_data, type = "class") -> dtresult
+#table(test_data$diagnosis..M.malignant..B.benign., dtresult)
+```
+
+### Confusion Matrix
+
+```{r}
+library(caret)
+
+confusionMatrix(table(test_data$diagnosis..M.malignant..B.benign., dtresult)) #the maximum accuracy of the model is 94.12
+```
+
+### Tree Model
+
+```{r}
+#install.packages("party")
+library(party)
+
+plot(ctree(diagnosis..M.malignant..B.benign. ~., data = train_data)) #tree model
+```
+
+## Random Forest
+
+### Fitting Model
+
+```{r}
+#install.packages("randomForest")
+library(randomForest) #using randomForest function to build a random forest classification model
+
+randomForest(formula = diagnosis..M.malignant..B.benign. ~., data = train_data) -> rfmodel #fitting the model
+summary(rfmodel) #model summary
+```
+
+### Predictions
+
+```{r}
+predict(rfmodel, test_data, type = "class") -> rfresult #using caret to make model predictions
+#table(test_data$diagnosis..M.malignant..B.benign., rfresult)
+```
+
+### Confusion Matrix
+
+```{r}
+confusionMatrix(table(test_data$diagnosis..M.malignant..B.benign., rfresult)) #the maximum accuracy of the model is 97.79
+```
+
+## Support Vector Machine
+
+```{r}
+#install.packages('e1071') 
+library(e1071) #using library e1071 to build a SVM classification model
+```
+
+### Fitting Model
+
+```{r}
+svm(diagnosis..M.malignant..B.benign. ~., data = train_data, type = 'C-classification', kernel = 'linear') -> svmmodel #fitting the model
+summary(svmmodel) #model summary
+```
+
+### Predictions
+
+```{r}
+predict(svmmodel, test_data, type = "class") -> svmresult #using caret to make model predictions
+#table(test_data$diagnosis..M.malignant..B.benign., svmresult)
+```
+
+### Confusion Matrix  
+
+```{r}
+confusionMatrix(table(test_data$diagnosis..M.malignant..B.benign., svmresult)) #the maximum accuracy of the model is 95.59
+```
+
+### Error vs Model Plot
+
+```{r}
+plot(rfmodel)
+```
+
+## Naive Bayes
+
+```{r}
+#install.packages('e1071') 
+#library(e1071) #using library e1071 to build a Naive Bayes classification model
+```
+
+### Fitting Model
+
+```{r}
+naiveBayes(diagnosis..M.malignant..B.benign. ~., data = train_data, laplace = 1) -> nbmodel #fitting the model
+summary(nbmodel) #model summary
+```
+
+### Predictions
+
+```{r}
+predict(nbmodel, test_data, type = "class") -> nbresult #using caret to make model predictions
+#table(test_data$diagnosis..M.malignant..B.benign., nbresult)
+```
+
+### Confusion Matrix  
+
+```{r}
+confusionMatrix(table(test_data$diagnosis..M.malignant..B.benign., nbresult)) #the maximum accuracy of the model is 90.44
+```
+
+## KNN 
+
+```{r}
+library(class) #using library class to build a KNN model
+
+knn(train, test, cl = train$diagnosis..M.malignant..B.benign., k=5) -> knnmodel #fitting the model
+confusionMatrix(table(test$diagnosis..M.malignant..B.benign., knnmodel)) #the maximum accuracy of the model is 98.75
+```
+
+## Neural Network: Model 1
+
+```{r}
+#install.packages('neuralnet') 
+library(neuralnet) #using library neuralnet to build a neural network classification model
+```
+
+```{r}
+train = train_data #creating dummy training data
+test = test_data #creating dummy testing data
+```
+
+### Categorical Encoding
+
+```{r}
+train$diagnosis..M.malignant..B.benign. <- ifelse(train$diagnosis..M.malignant..B.benign. %in% c("B", "B"), 0, 1) #encoding the categorical/ response variable in training data
+tail(train)
+
+test$diagnosis..M.malignant..B.benign. <- ifelse(test$diagnosis..M.malignant..B.benign. %in% c("B", "B"), 0, 1) #encoding the categorical/ response variable in testing data
+tail(test)
+```
+
+### Fitting Model
+
+```{r}
+neuralnet(diagnosis..M.malignant..B.benign. ~., data = train, hidden = 5, err.fct = "ce", linear.output = FALSE, lifesign = 'full', rep = 1, algorithm = "rprop+", stepmax = 100000) -> nnmodel #fitting the model
+summary(nnmodel) #model summary
+plot(nnmodel, rep = 1) #network architecture
+```
+
+### Results
+
+```{r}
+nnresults <- compute(nnmodel, test_data)
+results <- data.frame(actual = test$diagnosis..M.malignant..B.benign., prediction = nnresults$net.result)
+head(results)
+```
+
+### Prediction
+
+```{r}
+predict(nnmodel, test_data, type = "class") -> nnresult  #using caret to make model predictions
+#table(test_data$diagnosis..M.malignant..B.benign., nnresult)
+```
+
+### Confusion Matrix  
+
+```{r}
+#confusionMatrix(table(test_data$diagnosis..M.malignant..B.benign., nnresult))
+roundedresults <- sapply(results,round,digits = 0)
+roundedresultsdata = data.frame(roundedresults)
+attach(roundedresultsdata)
+table(actual, prediction)
+```
+
+### Model Statistics
+
+```{r}
+confusionMatrix(table(actual, prediction)) #the maximum accuracy of the model is 97.5
+```
+
+## Neural Network: Model 2
+
+### Fitting Model
+
+```{r}
+neuralnet(diagnosis..M.malignant..B.benign. ~., data = train, threshold = 0.03, hidden = 32, err.fct = "ce", linear.output = FALSE, lifesign = 'full',
+  act.fct = "logistic",rep = 1, algorithm = "backprop", learningrate = 0.003, stepmax = 100000) -> nnmodel
+summary(nnmodel) #model summary
+plot(nnmodel, rep = 1) #network architecture
+```
+
+### Results
+
+```{r}
+nnresults <- compute(nnmodel, test_data)
+results <- data.frame(actual = test$diagnosis..M.malignant..B.benign., prediction = nnresults$net.result)
+```
+
+```{r}
+head(results)
+```
+
+```{r}
+predict(nnmodel, test_data, type = "class") -> nnresult  #using caret to make model predictions
+#table(test_data$diagnosis..M.malignant..B.benign., nnresult)
+```
+
+### Confusion Matrix  
+
+```{r}
+#confusionMatrix(table(test_data$diagnosis..M.malignant..B.benign., nnresult))
+roundedresults <- sapply(results,round,digits = 0)
+roundedresultsdata = data.frame(roundedresults)
+attach(roundedresultsdata)
+table(actual, prediction)
+```
+
+### Model Statistics
+
+```{r}
+confusionMatrix(table(actual, prediction)) #the maximum accuracy of the model is 98.75
+```
+
+## Hybrid Models
+
+### Decision Tree and Random Forest
+
+```{r}
+confusionMatrix(table(round((ifelse(dtresult %in% c("B", "B"), 0, 1) + ifelse(rfresult %in% c("B", "B"), 0, 1))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 96.32
+```
+
+### Decision Tree and SVM
+
+```{r}
+confusionMatrix(table(round((ifelse(dtresult %in% c("B", "B"), 0, 1) + 
+                             ifelse(svmresult %in% c("B", "B"), 0, 1))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 96.32
+```
+
+### Random Forest and SVM
+
+```{r}
+confusionMatrix(table(round((ifelse(rfresult %in% c("B", "B"), 0, 1) + 
+                             ifelse(svmresult %in% c("B", "B"), 0, 1))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 96.32
+```
+
+### Random Forest and Naive Bayes
+
+```{r}
+confusionMatrix(table(round((ifelse(rfresult %in% c("B", "B"), 0, 1) + 
+                             ifelse(nbresult %in% c("B", "B"), 0, 1))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 94.12
+```
+
+### Random Forest and KNN
+
+```{r}
+confusionMatrix(table(round((ifelse(rfresult %in% c("B", "B"), 0, 1)*1.00 +
+                            (ifelse(knnmodel %in% c("B", "B"), 0, 1)*1.00))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 97.79
+```
+
+### Random Forest and Neural Network
+
+```{r}
+confusionMatrix(table(round((ifelse(rfresult %in% c("B", "B"), 0, 1)*0.90 + 
+                            (ifelse(nnresult %in% c("B", "B"), 0, 1)*0.90))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 97.79
+```
+
+### SVM and Naive Bayes
+
+```{r}
+confusionMatrix(table(round((ifelse(dtresult %in% c("B", "B"), 0, 1) + 
+                             ifelse(nbresult %in% c("B", "B"), 0, 1))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 92.65
+```
+
+
+### SVM and KNN
+
+```{r}
+confusionMatrix(table(round((ifelse(svmresult %in% c("B", "B"), 0, 1)*0.80 +
+                            (ifelse(knnmodel %in% c("B", "B"), 0, 1)*0.90))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 95.59
+```
+
+
+### SVM and Neural Network
+
+```{r}
+confusionMatrix(table(round((ifelse(svmresult %in% c("B", "B"), 0, 1) + 
+                             ifelse(nnresult %in% c("B", "B"), 0, 1))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 95.59
+```
+
+
+### Naive Bayes and Neural Network
+
+```{r}
+confusionMatrix(table(round((ifelse(nbresult %in% c("B", "B"), 0, 1) + 
+                             ifelse(nnresult %in% c("B", "B"), 0, 1))/2), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 90.44
+```
+
+### Random Forest, SVM and Neural Network
+
+```{r}
+confusionMatrix(table(round((ifelse(rfresult %in% c("B", "B"), 0, 1)*0.90 + 
+                             ifelse(svmresult %in% c("B", "B"), 0, 1)*0.85 + 
+                            (ifelse(nnresult %in% c("B", "B"), 0, 1)*0.90))/3), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 97.06
+```
+
+### Random Forest, SVM and KNN
+
+```{r}
+confusionMatrix(table(round((ifelse(rfresult %in% c("B", "B"), 0, 1)*0.90+
+                             ifelse(svmresult %in% c("B", "B"), 0, 1)*0.90 +
+                            (ifelse(knnmodel %in% c("B", "B"), 0, 1)*0.90))/3), test$diagnosis..M.malignant..B.benign.)) #averaged ensemble model with maximum accuracy 97.06
+```
+
+## Ensemble Model: Random Forest, SVM -> Neural Network
+
+### Creating Sample Datasets
+
+```{r}
+rftrain <- train #creating dummy training data for random forest algorithm
+rftest <- test #creating dummy training data for random forest algorithm
+
+svmtrain <- train #creating dummy training data for svm algorithm
+svmtest <- test #creating dummy testing data for svm algorithm
+
+ensembletrain <- train #creating dummy training data for stacked ensemble model
+ensembletest <- test #creating dummy testing data for stacked ensemble model
+```
+
+### Prediction for training data using Random Forest and SVM
+
+```{r}
+rftrain$diagnosis..M.malignant..B.benign. <- ifelse(predict(rfmodel, train_data, type = "class") %in% c("B", "B"), 0, 1) #encoding the categorical/ response variable in training data for random forest
+svmtrain$diagnosis..M.malignant..B.benign. <- ifelse(predict(svmmodel, train_data, type = "class") %in% c("B", "B"), 0, 1) #encoding the categorical/ response variable in training data for svm
+
+ensembletrain$diagnosis..M.malignant..B.benign. <-round((rftrain$diagnosis..M.malignant..B.benign. + svmtrain$diagnosis..M.malignant..B.benign.)/2) #encoding the categorical/ response variable in training data for stacked ensemble model
+```
+
+### Predction for testing data using Random Forest and SVM
+
+```{r}
+rftest$diagnosis..M.malignant..B.benign. <- ifelse(rfresult %in% c("B", "B"), 0, 1) #encoding the categorical/ response variable in testing data for random forest
+svmtest$diagnosis..M.malignant..B.benign. <- ifelse(svmresult %in% c("B", "B"), 0, 1) #encoding the categorical/ response variable in testing data for svm
+
+ensembletest$diagnosis..M.malignant..B.benign. <- round((rftest$diagnosis..M.malignant..B.benign. + svmtest$diagnosis..M.malignant..B.benign.)/2) #encoding the categorical/ response variable in testing data for stacked ensemble model
+```
+
+### Training the Neural Network
+
+```{r}
+neuralnet(diagnosis..M.malignant..B.benign. ~., data = ensembletrain, threshold = 0.03, hidden = 32, err.fct = "ce", linear.output = FALSE, lifesign = 'full',
+  act.fct = "logistic",rep = 1, algorithm = "backprop", learningrate = 0.003, stepmax = 100000) -> ensemblemodel #fitting the model
+summary(ensemblemodel) #model summary
+plot(ensemblemodel, rep = 1) # network architecture
+```
+
+### Model Results
+
+```{r}
+ensembleresults <- compute(ensemblemodel, ensembletest)
+ensembleresults <- data.frame(actual = ensembletest$diagnosis..M.malignant..B.benign., 
+                              prediction = ensembleresults$net.result)
+head(ensembleresults)
+```
+
+### Prediction
+
+```{r}
+predict(ensemblemodel, ensembletest, type = "class") -> ensembleresult #using caret to make model predictions
+```
+
+```{r}
+#confusionMatrix(table(test_data$diagnosis..M.malignant..B.benign., nnresult))
+roundedresults <- sapply(ensembleresults,round,digits = 0)
+roundedresultsdata = data.frame(roundedresults)
+attach(roundedresultsdata)
+#table(actual, prediction)
+```
+
+```{r}
+confusionMatrix(table(actual, prediction)) #the maximum accuracy of the model is 97.79
+```
+
